@@ -14,7 +14,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # device = 'cpu'
 
 class Net(nn.Module):
-    def __init__(self, class_counts):
+    def __init__(self):
         super().__init__()
         self.bn1 = nn.BatchNorm1d(16)
         self.ln1 = nn.Linear(16, 64)
@@ -24,7 +24,7 @@ class Net(nn.Module):
         self.out = nn.Linear(64, 1)
         self.dropout = nn.Dropout(p=0.2)
 
-    def forward(self, x1, x2):
+    def forward(self, x1):
         x_num = self.bn1(x1.float())
         x = F.relu(self.ln1(x_num))
         x = self.dropout(x)
@@ -51,7 +51,7 @@ def preprocessing(df):
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     return x1, x2, y
 
-loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(1))
+loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(8))
 
 def get_acc(y_pred, y_test):
     y_pred_tag = torch.round(torch.sigmoid(y_pred))
@@ -77,7 +77,7 @@ def train_model(model, optim, train_dl):
     sum_loss = 0
     for x1, x2, y in train_dl:
         batch_size = y.shape[0]
-        output = model(x1, x2)
+        output = model(x1)
         loss = loss_fn(output.squeeze(), y.squeeze().float())
         model.zero_grad()
         loss.backward()
@@ -92,7 +92,7 @@ def val_loss(model, valid_dl):
     total_acc = 0
     for x1, x2, y in valid_dl:
         batch_size = y.shape[0]
-        output = model(x1, x2)
+        output = model(x1)
         total_acc += batch_size * get_acc(output.squeeze(), y.squeeze().float())
         print(f'Recall: {get_recall(output.squeeze(), y.squeeze().float())}')
         loss = loss_fn(output.squeeze(), y.squeeze().float())
@@ -113,10 +113,7 @@ class HospitalDataset(Dataset):
     def __getitem__(self, idx):
         return self.x_num[idx], self.x_cat[idx], self.y[idx]
 
-
-if __name__ == '__main__':
-    file = 'Assignment3-Healthcare-Dataset.csv'
-    df = pd.read_csv(file)
+def train(df, model, optim, epoch):
     train_df, val_df = train_test_split(df, test_size=0.1, shuffle=False)
     x1_train, x2_train, y_train = preprocessing(train_df)
     x1_train = scaler.fit_transform(x1_train)
@@ -128,22 +125,40 @@ if __name__ == '__main__':
     val_ds = HospitalDataset(x1_val, x2_val, y_val)
 
     batch_size = 15000
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x)))
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True, collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x)))
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
+                          collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x)))
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=True,
+                        collate_fn=lambda x: tuple(x_.to(device) for x_ in default_collate(x)))
 
-    # print(val_ds[0])
-    # for x in val_ds:
-    #     print(x)
-    class_counts = x2_train.nunique().values
-    net = Net(class_counts)
-    net.to(device)
-    optim = torch.optim.Adam(net.parameters(), lr=0.015, weight_decay=0.00001)
-    epochs = 200
 
     for i in range(epochs):
         loss = train_model(net, optim, train_dl)
         print(f"Epoch: {i} | Loss: {loss}")
         val_loss(net, val_dl)
+
+def predict(unknown_df, model):
+    model.eval()
+    x, _, _ = preprocessing(unknown_df)
+    pred = model(torch.tensor(x.values).to(device))
+    pred = torch.round(torch.sigmoid(pred))
+
+    # print(pred.cpu().detach().numpy())
+    pd.DataFrame(pred.cpu().detach().numpy()).to_csv('Predictions.csv')
+
+if __name__ == '__main__':
+    file = 'Assignment3-Healthcare-Dataset.csv'
+    df = pd.read_csv(file)
+
+    net = Net()
+    net.to(device)
+    optim = torch.optim.Adam(net.parameters(), lr=0.015, weight_decay=0.00001)
+    epochs = 100
+    net.load_state_dict(torch.load('model.pth'))
+    # train(df, net, optim, epochs)
+    # torch.save(net.state_dict(), 'model.pth')
+
+    unknown_df = pd.read_csv('Assignment3-Unknown-Dataset.csv')
+    predict(unknown_df, net)
 
 
 
