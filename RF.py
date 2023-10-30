@@ -3,22 +3,11 @@ import pandas as pd
 import numpy as np
 # Modelling
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.tree import export_graphviz
 from scipy.stats import randint
 import joblib
-
-
-# Tree Visualisation
-from sklearn.tree import export_graphviz
-from IPython.display import Image
-import graphviz
-
-# Tree Visualisation
-from sklearn.tree import export_graphviz
-from IPython.display import Image
-import graphviz
 
 
 def preprocessing(df):
@@ -41,24 +30,25 @@ def train(df):
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
     rf = RandomForestClassifier()
-    # rf.fit(x_train, y_train.values.ravel())
-    # y_pred = rf.predict(x_val)
-    # accuracy = accuracy_score(y_val, y_pred)
-    # print("Accuracy:", accuracy)
 
-    # Randomizing params
-    param_dist = {'n_estimators': randint(10, 200),
-                  'max_depth': randint(10, 20)}
-    rand_params = RandomizedSearchCV(rf, param_distributions=param_dist, n_iter=50, cv=5, n_jobs=6)
+    param_dist = {
+        'n_estimators': randint(10, 200),
+        'max_depth': randint(10, 20)
+    }
+
+    rand_params = RandomizedSearchCV(rf,
+                                     param_distributions=param_dist,
+                                     n_iter=50,
+                                     cv=5,
+                                     n_jobs=6
+                                     )
     rand_params.fit(x_train, y_train.values.ravel())
     best_rf = rand_params.best_estimator_
     # Print the best hyperparameters
     print('Best hyperparameters:', rand_params.best_params_)
     best_rf.fit(x_train, y_train.values.ravel())
     y_pred = best_rf.predict(x_val)
-    accuracy = accuracy_score(y_val, y_pred)
-    recall = recall_score(y_val, y_pred)
-    print(f'Accuracy: {accuracy} | Recall: {recall}')
+    print(classification_report(y_val, y_pred))
     # joblib.dump(best_rf, 'rf_classifier.joblib')
 
 def predict(df):

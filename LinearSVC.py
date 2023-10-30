@@ -2,12 +2,13 @@
 import pandas as pd
 import numpy as np
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report, f1_score
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 import joblib
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
+
 
 def preprocessing(df):
     # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
@@ -18,7 +19,7 @@ def preprocessing(df):
     y = pd.DataFrame(df.pop('ExpiredHospital'))
     x1 = df.drop(labels=categorical_features, axis=1)
     x1.fillna(np.floor(x1.mean()), inplace=True)
-    # x1_scaled = (x1-x1.min())/(x1.max()-x1.min())
+    # x1 = scaler.fit_transform(x1)
     x2 = df[categorical_features]
     x2 = x2.fillna(x2.mode().iloc[0])
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
@@ -26,15 +27,14 @@ def preprocessing(df):
     return data, y
 
 def train(df):
-    train_df, val_df = train_test_split(df, test_size=0.8, shuffle=True)
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
     model = LinearSVC(max_iter=1000, dual=False)
     model.fit(x_train, y_train.values.ravel())
     y_pred = model.predict(x_val)
-    accuracy = accuracy_score(y_val, y_pred)
-    recall = recall_score(y_val, y_pred)
-    print(f'Accuracy: {accuracy} | Recall: {recall}')
+    report = classification_report(y_val, y_pred)
+    print(report)
     # joblib.dump(model, 'LinSVC_classifier.joblib')
 
 def predict(df):

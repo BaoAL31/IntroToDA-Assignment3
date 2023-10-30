@@ -8,6 +8,7 @@ from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import train_test_split
 from torch.utils.data.dataloader import default_collate
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, f1_score, classification_report
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -51,7 +52,9 @@ def preprocessing(df):
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     return x1, x2, y
 
-loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(8))
+scale = 8.9
+
+loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(scale))
 
 def get_acc(y_pred, y_test):
     y_pred_tag = torch.round(torch.sigmoid(y_pred))
@@ -86,19 +89,14 @@ def train_model(model, optim, train_dl):
         sum_loss += batch_size * (loss.item())
     return sum_loss/total
 
-def val_loss(model, valid_dl):
+def val_func(model, valid_dl):
     model.eval()
-    total = 0
-    total_acc = 0
     for x1, x2, y in valid_dl:
-        batch_size = y.shape[0]
         output = model(x1)
-        total_acc += batch_size * get_acc(output.squeeze(), y.squeeze().float())
-        print(f'Recall: {get_recall(output.squeeze(), y.squeeze().float())}')
-        loss = loss_fn(output.squeeze(), y.squeeze().float())
-        total += batch_size
-        pred = torch.max(output, 1)[1]
-    print(f'Accuracy: {total_acc / total}')
+        pred_cpu = torch.round(torch.sigmoid(output))
+        pred_cpu = pred_cpu.squeeze().cpu().detach().numpy()
+        label_cpu = y.squeeze().float().cpu().detach().numpy()
+        print(classification_report(y_true=label_cpu, y_pred=pred_cpu))
     return
 
 class HospitalDataset(Dataset):
@@ -114,7 +112,7 @@ class HospitalDataset(Dataset):
         return self.x_num[idx], self.x_cat[idx], self.y[idx]
 
 def train(df, model, optim, epoch):
-    train_df, val_df = train_test_split(df, test_size=0.1, shuffle=False)
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=False)
     x1_train, x2_train, y_train = preprocessing(train_df)
     x1_train = scaler.fit_transform(x1_train)
 
@@ -134,7 +132,7 @@ def train(df, model, optim, epoch):
     for i in range(epochs):
         loss = train_model(net, optim, train_dl)
         print(f"Epoch: {i} | Loss: {loss}")
-        val_loss(net, val_dl)
+        val_func(net, val_dl)
 
 def predict(unknown_df, model):
     model.eval()
@@ -152,13 +150,13 @@ if __name__ == '__main__':
     net = Net()
     net.to(device)
     optim = torch.optim.Adam(net.parameters(), lr=0.015, weight_decay=0.00001)
-    epochs = 100
+    epochs = 200
     net.load_state_dict(torch.load('model.pth'))
-    # train(df, net, optim, epochs)
+    train(df, net, optim, epochs)
     # torch.save(net.state_dict(), 'model.pth')
 
-    unknown_df = pd.read_csv('Assignment3-Unknown-Dataset.csv')
-    predict(unknown_df, net)
+    # unknown_df = pd.read_csv('Assignment3-Unknown-Dataset.csv')
+    # predict(unknown_df, net)
 
 
 

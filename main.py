@@ -17,9 +17,8 @@ class Net(nn.Module):
     def __init__(self, class_counts):
         super().__init__()
         self.embeddings = nn.ModuleList([nn.Embedding(num_embeddings=class_count, embedding_dim=20) for class_count in class_counts])
-        self.bn1 = nn.BatchNorm1d(16)
         self.ln1 = nn.Linear(17, 64)
-        self.bn2 = nn.BatchNorm1d(64)
+        self.bn = nn.BatchNorm1d(64)
         self.ln2 = nn.Linear(64, 64)
         self.out = nn.Linear(64, 1)
         self.dropout = nn.Dropout(p=0.2)
@@ -30,13 +29,11 @@ class Net(nn.Module):
         x_cat = [e(x2[:, i]) for i, e in enumerate(self.embeddings)]
         x_cat = torch.cat(x_cat, 1)
         x_cat = self.emb_lin(x_cat)
-        x_cat = self.emb_drop(x_cat)
-        x_num = self.bn1(x1.float())
+        x_num = self.bn(x1.float())
         x = torch.cat([x_num, x_cat], 1)
         x = F.relu(self.ln1(x))
-        x = self.bn2(x)
+        x = self.dropout(x)
         x = F.relu(self.ln2(x))
-        # x = self.bn3(x)
         x = self.out(x)
         return x
 
@@ -142,9 +139,9 @@ if __name__ == '__main__':
     class_counts = x2_train.nunique().values
     net = Net(class_counts)
     net.to(device)
+
     optim = torch.optim.Adam(net.parameters(), lr=0.015, weight_decay=0.00001)
     epochs = 200
-
     for i in range(epochs):
         loss = train_model(net, optim, train_dl)
         print(f"Epoch: {i} | Loss: {loss}")

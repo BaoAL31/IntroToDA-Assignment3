@@ -30,6 +30,7 @@ def preprocessing(df):
     x2 = df[categorical_features]
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     data = pd.concat([x1, x2], axis=1)
+    # print(data)
     return data, y
 
 
@@ -51,22 +52,37 @@ def report_perf(optimizer, x_train, y_train, title="model"):
 
 
 def train(df):
-    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
+    categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'religion', 'ethnicity',
+                            'AdmitDiagnosis', 'AdmitProcedure', 'marital_status']
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=False)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
 
-    model = lgb.LGBMClassifier( boosting_type='dart',
+    fixed_params = {
+        # 'learning_rate': 0.05,
+        # 'n_estimators': 320,
+        # 'num_leaves': 200,
+        "max_depth": 22,
+        "min_child_samples": 7,
+        "colsample_bytree": 0.8738172709258141,
+        "subsample": 0.7683619877865955,
+        "min_split_gain": 0.5
+    }
+
+    model = lgb.LGBMClassifier( boosting_type='gbdt',
                                 objective='binary',
                                 metric='f1_weighted',
                                 n_jobs=2,
                                 verbose=-1,
                                 is_unbalance=True,
+                                # random_state=42,
                               )
     search_spaces = {
-        'learning_rate': Real(0.001, 0.4, 'log-uniform'),  # Boosting learning rate
-        'n_estimators': Integer(100, 600),  # Number of boosted trees to fit
+        'learning_rate': Real(0.05, 0.5, 'log-uniform'),  # Boosting learning rate
+        'n_estimators': Integer(200, 600),  # Number of boosted trees to fit
         'num_leaves': Integer(100, 500),  # Maximum tree leaves for base learners
-        # 'max_depth': Integer(10, 25),  # Maximum tree depth for base learners, <=0 means no limit
+        'max_depth': Integer(10, 24),  # Maximum tree depth for base learners, <=0 means no limit
+
     }
 
     opt = BayesSearchCV(estimator=model,
@@ -79,16 +95,19 @@ def train(df):
                         return_train_score=True,
                         refit=False,
                         optimizer_kwargs={'base_estimator': 'GP'},  # optmizer parameters: we use Gaussian Process (GP)
+                        # random_state=42,
                         )
 
     best_params = report_perf(opt, x_train, y_train, 'LightGBM_classifier')
-    best_model = lgb.LGBMClassifier(boosting_type='dart',
+    best_model = lgb.LGBMClassifier(boosting_type='gbdt',
                                     objective='binary',
                                     metric='f1_weighted',
-                                    n_jobs=2,
+                                    n_jobs=1,
                                     verbose=-1,
                                     is_unbalance=True,
-                                    **best_params)
+                                    # random_state=42,
+                                    **best_params,
+                                    )
 
     best_model.fit(x_train, y_train.values.ravel())
     y_pred = best_model.predict(x_val)
@@ -96,8 +115,10 @@ def train(df):
     recall = recall_score(y_val, y_pred)
     roc_auc = roc_auc_score(y_val, y_pred)
     f1 = f1_score(y_val, y_pred)
-    print(f'F1: {f1} | Roc_auc: {roc_auc} | Recall: {recall} | Accuracy: {accuracy}')
-    return f1, roc_auc, best_model
+    f1_mac = f1_score(y_val, y_pred, average='macro')
+    print(f'F1: {f1} | F1_mac: {f1_mac} | Recall: {recall} | Accuracy: {accuracy}')
+
+    return f1, accuracy, model
 
 def predict(df):
     x, _ = preprocessing(df)
@@ -109,14 +130,18 @@ def predict(df):
 if __name__ == '__main__':
     file = 'Assignment3-Healthcare-Dataset.csv'
     df = pd.read_csv(file)
-    max_f1 = 0.67
+    max_f1 = 0.66
+    max_acc = 0.935
+    # a = df.corr()
+    # print(a)
     for i in range(50):
-        f1, roc_auc, model = train(df)
-        if f1 > max_f1:
+        f1, acc, model = train(df)
+        if f1 > max_f1 and acc > max_acc:
             max_f1 = f1
+            max_acc = acc
             joblib.dump(model, 'lgbm_classifier.joblib')
             print("Saved: ", end="")
-            print(f'New max f1: {max_f1}')
+            print(f'New max f1: {max_f1}, acc: {max_acc}')
             print(model.get_params())
     # predict(pd.read_csv('Assignment3-Unknown-Dataset.csv'))
 
