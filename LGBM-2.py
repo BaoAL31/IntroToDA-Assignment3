@@ -65,27 +65,21 @@ def train(df):
         'metric': 'f1_macro',
         'scale_pos_weight': scale,
         'bagging_freq': 1,
-        'learning_rate': 0.02,
-        'n_estimators': 400,
+        # 'learning_rate': 0.02,
+        # 'n_estimators': 400,
     }
 
     model = lgb.LGBMClassifier(**fixed_params)
     search_spaces = {
-        # 'learning_rate': Real(0.02, 0.03, 'log-uniform'),
-        # 'n_estimators': Integer(300, 500),
+        'learning_rate': Real(0.01, 0.03, 'log-uniform'),
+        'n_estimators': Integer(300, 500),
         'num_leaves': Integer(200, 300),
         'max_depth': Integer(15, 28),
         'bagging_fraction': (0.7, 0.9),
-        'min_samples_leaf': Integer(1, 5),
-        'min_samples_split': Integer(1, 8),
+        'min_samples_leaf': Integer(2, 5),
+        'min_samples_split': Integer(2, 8),
         # 'reg_alpha': Real(0.3, 0.7, 'log-uniform'),  # L1 regularization
         # 'reg_lambda': Real(0.2, 0.5, 'log-uniform'),      # L2 regularization
-    }
-
-    fit_params = {
-        'early_stopping_rounds': 200,
-        'eval_set': [(x_val, y_val)],
-        'eval_metric': 'f1_macro'
     }
 
     opt = BayesSearchCV(estimator=model,

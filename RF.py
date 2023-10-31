@@ -55,6 +55,7 @@ def train(df):
     rand_params.fit(x_train, y_train.values.ravel())
     best_params = rand_params.best_params_
     print('Best hyperparameters:', best_params)
+
     best_rf = RandomForestClassifier(
         **best_params,
         class_weight={0: 1, 1: scale},
@@ -62,6 +63,7 @@ def train(df):
     best_rf.fit(x_train, y_train.values.ravel())
     y_pred = best_rf.predict(x_val)
     print(classification_report(y_val, y_pred))
+
     # joblib.dump(best_rf, 'rf_classifier.joblib')
 
 def predict(df):

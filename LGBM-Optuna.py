@@ -33,36 +33,32 @@ def preprocessing(df):
     return data, y
 
 def objective(trial):
+
     file = 'Assignment3-Healthcare-Dataset.csv'
     df = pd.read_csv(file)
     train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
 
+    scale = df['ExpiredHospital'].value_counts()[0]/df['ExpiredHospital'].value_counts()[1]
     params = {
-        # 'device': 'gpu',
+        "boosting": "rf",
         "objective": "binary",
         "metric": "f1_macro",
         "verbosity": -1,
-        "boosting_type": "gbdt",
         "num_class": 1,
-        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.05, log=True),
-        # 'n_estimators': trial.suggest_int('n_estimators', 550, 750),
+        "scale_pos_weight": scale,
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
         # "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
         # "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
         "num_leaves": trial.suggest_int("num_leaves", 100, 400),
-        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.4, 1.0),
-        "bagging_freq": trial.suggest_int("bagging_freq", 1, 7),
-        # "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+        "bagging_fraction": trial.suggest_float("bagging_fraction", 0.6, 1.0),
+        "bagging_freq": trial.suggest_int("bagging_freq", 1, 3),
+        "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
     }
+    gbm = lgb.LGBMClassifier(**params)
 
-    dtrain = lgb.Dataset(x_train, label=y_train)
-    gbm = lgb.train(
-        params,
-        dtrain,
-        num_boost_round=400,
-    )
-
+    gbm.fit(x_train, y_train.values.ravel())
     y_pred = gbm.predict(x_val)
     y_pred = np.rint(y_pred)
     f1_macro = f1_score(y_val, y_pred, average='macro')
@@ -78,13 +74,15 @@ def train():
     dtrain = lgb.Dataset(x_train, label=y_train)
 
     study = optuna.create_study(study_name="lightgbm", direction="maximize")
-    study.optimize(objective, n_trials=50)
+    study.optimize(objective, n_trials=100)
+
     best_model = lgb.LGBMClassifier(**study.best_params)
     best_model.fit(x_train, y_train.values.ravel())
     y_pred = best_model.predict(x_val)
     accuracy = accuracy_score(y_val, y_pred)
     f1 = f1_score(y_val, y_pred, average='macro')
     print(classification_report(y_val, y_pred))
+
     return f1, accuracy, best_model
 
 def predict(df):

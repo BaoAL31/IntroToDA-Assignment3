@@ -56,7 +56,7 @@ def train(df):
     random_params = RandomizedSearchCV(model,
                                        scoring='f1_macro',
                                        param_distributions=params_dist,
-                                       n_iter=100,
+                                       n_iter=50,
                                        cv=5,
                                        n_jobs=2,
                                        verbose=3,
