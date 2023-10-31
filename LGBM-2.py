@@ -65,8 +65,8 @@ def train(df):
         'metric': 'f1_macro',
         'scale_pos_weight': scale,
         'bagging_freq': 1,
-        'learning_rate': 0.03,
-        'n_estimators': 450,
+        'learning_rate': 0.02,
+        'n_estimators': 400,
     }
 
     model = lgb.LGBMClassifier(**fixed_params)
@@ -74,8 +74,10 @@ def train(df):
         # 'learning_rate': Real(0.02, 0.03, 'log-uniform'),
         # 'n_estimators': Integer(300, 500),
         'num_leaves': Integer(200, 300),
-        'max_depth': Integer(15, 30),
+        'max_depth': Integer(15, 28),
         'bagging_fraction': (0.7, 0.9),
+        'min_samples_leaf': Integer(1, 5),
+        'min_samples_split': Integer(1, 8),
         # 'reg_alpha': Real(0.3, 0.7, 'log-uniform'),  # L1 regularization
         # 'reg_lambda': Real(0.2, 0.5, 'log-uniform'),      # L2 regularization
     }
@@ -97,7 +99,7 @@ def train(df):
                         refit=False,
                         optimizer_kwargs={'base_estimator': 'GP'},  # optmizer parameters: we use Gaussian Process (GP)
                         # fit_params=fit_params,
-                        verbose=0,
+                        verbose=3,
                         )
     best_params = report_perf(opt, x_train, y_train, 'LightGBM_classifier')
     best_model = lgb.LGBMClassifier(

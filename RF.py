@@ -7,15 +7,16 @@ from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, r
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.tree import export_graphviz
 from scipy.stats import randint
+from skopt.space import Real, Categorical, Integer
 import joblib
 
 
 def preprocessing(df):
     # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
     # Dropping marital_status, LOSgroupNum because too many missing values; AdmitDiagnosis, AdmitProcedure because too many classes.
-    df.drop(labels=['marital_status', 'LOSgroupNum', 'religion', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure'], axis=1, inplace=True)
+    df.drop(labels=['LOSgroupNum'], axis=1, inplace=True)
 
-    categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance']
+    categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'marital_status', 'religion', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure']
     y = pd.DataFrame(df.pop('ExpiredHospital'))
     x1 = df.drop(labels=categorical_features, axis=1)
     x1.fillna(np.floor(x1.mean()), inplace=True)
@@ -26,26 +27,38 @@ def preprocessing(df):
     return data, y
 
 def train(df):
-    train_df, val_df = train_test_split(df, test_size=0.5, shuffle=True)
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
-    rf = RandomForestClassifier()
+    scale = df['ExpiredHospital'].value_counts()[0]/df['ExpiredHospital'].value_counts()[1]
+
+    rf = RandomForestClassifier(
+        class_weight={0: 1, 1: scale}
+    )
 
     param_dist = {
-        'n_estimators': randint(10, 200),
-        'max_depth': randint(10, 20)
+        'n_estimators': randint(100, 200),
+        'max_depth': randint(15, 25),
+        'min_samples_leaf': randint(1, 5),
+        'min_samples_split': randint(1, 8),
     }
 
     rand_params = RandomizedSearchCV(rf,
+                                     scoring="f1_macro",
                                      param_distributions=param_dist,
                                      n_iter=50,
                                      cv=5,
-                                     n_jobs=6
+                                     n_jobs=4,
+                                     verbose=3,
                                      )
+
     rand_params.fit(x_train, y_train.values.ravel())
-    best_rf = rand_params.best_estimator_
-    # Print the best hyperparameters
-    print('Best hyperparameters:', rand_params.best_params_)
+    best_params = rand_params.best_params_
+    print('Best hyperparameters:', best_params)
+    best_rf = RandomForestClassifier(
+        **best_params,
+        class_weight={0: 1, 1: scale},
+    )
     best_rf.fit(x_train, y_train.values.ravel())
     y_pred = best_rf.predict(x_val)
     print(classification_report(y_val, y_pred))

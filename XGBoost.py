@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import torch
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 import joblib
 from xgboost import XGBClassifier
@@ -31,25 +31,43 @@ def preprocessing(df):
     return data, y
 
 def train(df):
-    train_df, val_df = train_test_split(df, test_size=0.8, shuffle=True)
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
+    scale = df['ExpiredHospital'].value_counts()[0]/df['ExpiredHospital'].value_counts()[1]
+
     model = XGBClassifier()
-    params_dist = {
-        'n_estimators': randint(110, 240),
-        'max_depth': randint(3, 15),
-        'learning_rate': [0.05, 0.06, 0.075],
-        'min_child_weight': randint(2, 5)
+    fixed_params = {
+        'n_jobs': 2,
+        'objective': 'binary:logistic',
+        'scale_pos_weight': scale,
+        'subsample': 0.9,
+        # 'learning_rate': 0.05,
     }
-    random_params = RandomizedSearchCV(model, param_distributions=params_dist, n_iter=200, cv=5, n_jobs=2)
+    model.set_params(**fixed_params)
+
+    params_dist = {
+        'n_estimators': randint(100, 400),
+        'max_depth': randint(10, 30),
+        'learning_rate': [0.02, 0.05, 0.08],
+        # 'min_child_weight': randint(2, 5),
+    }
+
+    random_params = RandomizedSearchCV(model,
+                                       scoring='f1_macro',
+                                       param_distributions=params_dist,
+                                       n_iter=100,
+                                       cv=5,
+                                       n_jobs=2,
+                                       verbose=3,
+                                       )
     random_params.fit(x_train.values, y_train.values.ravel())
     print('Best hyperparameters:', random_params.best_params_)
+    # best_model = model
     best_model = random_params.best_estimator_
     best_model.fit(x_train, y_train.values.ravel())
     y_pred = best_model.predict(x_val)
-    accuracy = accuracy_score(y_val, y_pred)
-    recall = recall_score(y_val, y_pred)
-    print(f'Accuracy: {accuracy} | Recall: {recall}')
+    print(classification_report(y_val, y_pred))
     # joblib.dump(best_model, 'xgb_classifier.joblib')
 
 def predict(df):
