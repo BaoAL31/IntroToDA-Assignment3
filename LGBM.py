@@ -2,21 +2,16 @@
 import pandas as pd
 import numpy as np
 import sklearn.metrics
-import torch
 # Modelling
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 import joblib
-from xgboost import XGBClassifier
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import randint
 from sklearn.metrics import f1_score, make_scorer
 import random
 from sklearn.metrics import roc_auc_score, f1_score
 import lightgbm as lgb
-from skopt import BayesSearchCV
-from skopt.space import Real, Categorical, Integer
 scaler = StandardScaler()
 device = 'cuda'
 
@@ -30,7 +25,6 @@ def preprocessing(df):
     x2 = df[categorical_features]
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     data = pd.concat([x1, x2], axis=1)
-    # print(data)
     return data, y
 
 
@@ -132,17 +126,16 @@ if __name__ == '__main__':
     df = pd.read_csv(file)
     max_f1 = 0.66
     max_acc = 0.935
-    # a = df.corr()
-    # print(a)
-    for i in range(50):
-        f1, acc, model = train(df)
-        if f1 > max_f1 and acc > max_acc:
-            max_f1 = f1
-            max_acc = acc
-            joblib.dump(model, 'lgbm_classifier.joblib')
-            print("Saved: ", end="")
-            print(f'New max f1: {max_f1}, acc: {max_acc}')
-            print(model.get_params())
+    preprocessing(df)
+    # for i in range(50):
+    #     f1, acc, model = train(df)
+    #     if f1 > max_f1 and acc > max_acc:
+    #         max_f1 = f1
+    #         max_acc = acc
+    #         joblib.dump(model, 'lgbm_classifier.joblib')
+    #         print("Saved: ", end="")
+    #         print(f'New max f1: {max_f1}, acc: {max_acc}')
+    #         print(model.get_params())
     # predict(pd.read_csv('Assignment3-Unknown-Dataset.csv'))
 
 

@@ -7,7 +7,6 @@ from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, r
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.tree import export_graphviz
 from scipy.stats import randint
-from skopt.space import Real, Categorical, Integer
 import joblib
 
 
@@ -24,6 +23,7 @@ def preprocessing(df):
     x2 = x2.fillna(x2.mode().iloc[0])
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     data = pd.concat([x1, x2], axis=1)
+    data = pd.concat([data, y], axis=1)
     return data, y
 
 def train(df):
