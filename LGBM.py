@@ -1,23 +1,15 @@
 # Data Processing
 import pandas as pd
-import numpy as np
-import sklearn.metrics
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.metrics import accuracy_score, classification_report, f1_score
+from sklearn.model_selection import train_test_split
 import joblib
-from sklearn.preprocessing import StandardScaler
-from scipy.stats import randint
-from sklearn.metrics import f1_score, make_scorer
-import random
-from sklearn.metrics import roc_auc_score, f1_score
 import lightgbm as lgb
-scaler = StandardScaler()
-device = 'cuda'
+from skopt import BayesSearchCV
+from skopt.space import Real, Integer
 
 def preprocessing(df):
-    # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
-    # Dropping marital_status, LOSgroupNum because too many missing values; AdmitDiagnosis, AdmitProcedure because too many classes.
+
     df.drop(labels=['LOSgroupNum'], axis=1, inplace=True)
     categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'religion', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure', 'marital_status']
     y = pd.DataFrame(df.pop('ExpiredHospital'))
@@ -46,73 +38,60 @@ def report_perf(optimizer, x_train, y_train, title="model"):
 
 
 def train(df):
-    categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'religion', 'ethnicity',
-                            'AdmitDiagnosis', 'AdmitProcedure', 'marital_status']
-    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=False)
+    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
     x_train, y_train = preprocessing(train_df)
     x_val, y_val = preprocessing(val_df)
+    scale = df['ExpiredHospital'].value_counts()[0]/df['ExpiredHospital'].value_counts()[1]
 
     fixed_params = {
-        # 'learning_rate': 0.05,
-        # 'n_estimators': 320,
-        # 'num_leaves': 200,
-        "max_depth": 22,
-        "min_child_samples": 7,
-        "colsample_bytree": 0.8738172709258141,
-        "subsample": 0.7683619877865955,
-        "min_split_gain": 0.5
+        'n_jobs': 2,
+        'verbose': -1,
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': 'f1_macro',
+        'scale_pos_weight': scale,
+        'bagging_freq': 1,
+        # 'learning_rate': 0.02,
+        # 'n_estimators': 400,
     }
 
-    model = lgb.LGBMClassifier( boosting_type='gbdt',
-                                objective='binary',
-                                metric='f1_weighted',
-                                n_jobs=2,
-                                verbose=-1,
-                                is_unbalance=True,
-                                # random_state=42,
-                              )
+    model = lgb.LGBMClassifier(**fixed_params)
     search_spaces = {
-        'learning_rate': Real(0.05, 0.5, 'log-uniform'),  # Boosting learning rate
-        'n_estimators': Integer(200, 600),  # Number of boosted trees to fit
-        'num_leaves': Integer(100, 500),  # Maximum tree leaves for base learners
-        'max_depth': Integer(10, 24),  # Maximum tree depth for base learners, <=0 means no limit
+        'learning_rate': Real(0.01, 0.03, 'log-uniform'),
+        'n_estimators': Integer(250, 450),
+        'num_leaves': Integer(200, 300),
+        'max_depth': Integer(15, 28),
+        'bagging_fraction': (0.7, 0.9),
 
+        'reg_alpha': Real(0.3, 0.7, 'log-uniform'),  # L1 regularization
+        'reg_lambda': Real(0.2, 0.5, 'log-uniform'),      # L2 regularization
     }
 
     opt = BayesSearchCV(estimator=model,
                         search_spaces=search_spaces,
-                        scoring='f1_weighted',
+                        scoring='f1_macro',
                         cv=5,
                         n_iter=5,  # max number of trials
-                        n_points=2,  # number of hyperparameter sets evaluated at the same time
+                        n_points=3,  # number of hyperparameter sets evaluated at the same time
                         n_jobs=2,  # number of jobs
                         return_train_score=True,
                         refit=False,
                         optimizer_kwargs={'base_estimator': 'GP'},  # optmizer parameters: we use Gaussian Process (GP)
-                        # random_state=42,
+                        verbose=-1,
                         )
-
     best_params = report_perf(opt, x_train, y_train, 'LightGBM_classifier')
-    best_model = lgb.LGBMClassifier(boosting_type='gbdt',
-                                    objective='binary',
-                                    metric='f1_weighted',
-                                    n_jobs=1,
-                                    verbose=-1,
-                                    is_unbalance=True,
-                                    # random_state=42,
+    best_model = lgb.LGBMClassifier(
                                     **best_params,
+                                    **fixed_params,
                                     )
 
     best_model.fit(x_train, y_train.values.ravel())
     y_pred = best_model.predict(x_val)
     accuracy = accuracy_score(y_val, y_pred)
-    recall = recall_score(y_val, y_pred)
-    roc_auc = roc_auc_score(y_val, y_pred)
-    f1 = f1_score(y_val, y_pred)
     f1_mac = f1_score(y_val, y_pred, average='macro')
-    print(f'F1: {f1} | F1_mac: {f1_mac} | Recall: {recall} | Accuracy: {accuracy}')
-
-    return f1, accuracy, model
+    print(f'F1_mac: {f1_mac} | Accuracy: {accuracy}')
+    print(classification_report(y_val, y_pred))
+    return f1_mac, accuracy, best_model
 
 def predict(df):
     x, _ = preprocessing(df)
@@ -124,19 +103,19 @@ def predict(df):
 if __name__ == '__main__':
     file = 'Assignment3-Healthcare-Dataset.csv'
     df = pd.read_csv(file)
-    max_f1 = 0.66
-    max_acc = 0.935
-    preprocessing(df)
-    # for i in range(50):
-    #     f1, acc, model = train(df)
-    #     if f1 > max_f1 and acc > max_acc:
-    #         max_f1 = f1
-    #         max_acc = acc
-    #         joblib.dump(model, 'lgbm_classifier.joblib')
-    #         print("Saved: ", end="")
-    #         print(f'New max f1: {max_f1}, acc: {max_acc}')
-    #         print(model.get_params())
-    # predict(pd.read_csv('Assignment3-Unknown-Dataset.csv'))
+    max_f1_mac = 0.824
+    max_acc = 0.94
+    for i in range(100):
+        print("Interation:", i)
+        f1_mac, acc, model = train(df)
+        if f1_mac > max_f1_mac:
+            max_f1_mac = f1_mac
+            max_acc = acc
+            joblib.dump(model, 'lgbm_classifier.joblib')
+            print("Saved: ", end="")
+            print(f'New max f1 macro: {max_f1_mac}')
+            print(model.get_params())
+    predict(pd.read_csv('Assignment3-Unknown-Dataset.csv'))
 
 
 

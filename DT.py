@@ -19,10 +19,9 @@ def preprocessing(df):
     categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'religion', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure', 'marital_status']
     y = pd.DataFrame(df.pop('ExpiredHospital'))
     x1 = df.drop(labels=categorical_features, axis=1)
-    # print(np.floor(x1.mean()))
-    # x1.fillna(np.floor(x1.mean()), inplace=True)
+    x1.fillna(np.floor(x1.mean()), inplace=True)
     x2 = df[categorical_features]
-    # x2 = x2.fillna(x2.mode().iloc[0])
+    x2 = x2.fillna(x2.mode().iloc[0])
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
     data = pd.concat([x1, x2], axis=1)
     return data, y

@@ -5,7 +5,6 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score, classification_report
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
-from sklearn.tree import export_graphviz
 from scipy.stats import randint
 import joblib
 

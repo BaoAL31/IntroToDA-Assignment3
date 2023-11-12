@@ -2,8 +2,8 @@
 import pandas as pd
 import numpy as np
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report, f1_score
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
 import joblib
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
@@ -12,24 +12,26 @@ scaler = StandardScaler()
 
 def preprocessing(df):
     # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
-    # Dropping marital_status, LOSgroupNum because too many missing values; AdmitDiagnosis, AdmitProcedure because too many classes.
-    df.drop(labels=['marital_status', 'LOSgroupNum'], axis=1, inplace=True)
-
-    categorical_features = ['gender', 'admit_type', 'admit_location', 'insurance', 'religion', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure']
+    # Dropping religion and LOSgroupNum because SVC can't handle missing values well.
+    df = df.drop(labels=['LOSgroupNum', 'religion'], axis=1)
+    categorical_features = ['marital_status', 'gender', 'admit_type', 'admit_location', 'insurance', 'ethnicity', 'AdmitDiagnosis', 'AdmitProcedure']
     y = pd.DataFrame(df.pop('ExpiredHospital'))
     x1 = df.drop(labels=categorical_features, axis=1)
     x1.fillna(np.floor(x1.mean()), inplace=True)
-    # x1 = scaler.fit_transform(x1)
+    # Normalize numerical features
+    x1 = pd.DataFrame(scaler.fit_transform(x1), columns=x1.columns)
     x2 = df[categorical_features]
     x2 = x2.fillna(x2.mode().iloc[0])
+    # Integer Encode categorical features.
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
-    data = pd.concat([x1, x2], axis=1)
-    return data, y
+    data = pd.concat([x1, x2, y], axis=1)
+    return data
 
 def train(df):
-    train_df, val_df = train_test_split(df, test_size=0.2, shuffle=True)
-    x_train, y_train = preprocessing(train_df)
-    x_val, y_val = preprocessing(val_df)
+    df_preprocessed = preprocessing(df)
+    train_df, val_df = train_test_split(df_preprocessed, test_size=0.8, shuffle=True)
+    x_train, y_train = train_df.drop(labels=['ExpiredHospital'], axis=1), train_df['ExpiredHospital']
+    x_val, y_val = val_df.drop(labels=['ExpiredHospital'], axis=1), val_df['ExpiredHospital']
     model = LinearSVC(max_iter=1000, dual=False)
     model.fit(x_train, y_train.values.ravel())
     y_pred = model.predict(x_val)

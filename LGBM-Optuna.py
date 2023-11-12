@@ -1,24 +1,16 @@
 # Data Processing
 import pandas as pd
 import numpy as np
-import sklearn.metrics
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
+from sklearn.metrics import classification_report, f1_score
+from sklearn.model_selection import train_test_split
 import joblib
 from sklearn.preprocessing import StandardScaler
-from scipy.stats import randint
-from sklearn.metrics import f1_score, make_scorer
-import random
-from sklearn.metrics import roc_auc_score, f1_score
-from optuna.samplers import TPESampler
+from sklearn.metrics import f1_score
 import lightgbm as lgb
-from lightgbm import log_evaluation
 import optuna
+optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-# optuna.logging.set_verbosity(optuna.logging.WARNING)
-scaler = StandardScaler()
-device = 'cuda'
 
 def preprocessing(df):
     # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
@@ -79,11 +71,10 @@ def train():
     best_model = lgb.LGBMClassifier(**study.best_params)
     best_model.fit(x_train, y_train.values.ravel())
     y_pred = best_model.predict(x_val)
-    accuracy = accuracy_score(y_val, y_pred)
     f1 = f1_score(y_val, y_pred, average='macro')
     print(classification_report(y_val, y_pred))
 
-    return f1, accuracy, best_model
+    return f1, best_model
 
 def predict(df):
     x, _ = preprocessing(df)
@@ -95,12 +86,10 @@ def predict(df):
 
 if __name__ == '__main__':
     max_f1 = 0.67
-    max_acc = 0.94
     for i in range(10):
-        f1, acc, model = train()
-        if f1 > max_f1 and acc > max_acc:
+        f1, model = train()
+        if f1 > max_f1:
             max_f1 = f1
-            max_acc = acc
             joblib.dump(model, 'lgbm_classifier.joblib')
             print("Saved: ", end="")
             print(f'New max f1: {max_f1}')

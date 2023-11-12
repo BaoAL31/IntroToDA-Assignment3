@@ -1,18 +1,14 @@
 # Data Processing
 import pandas as pd
 import numpy as np
-import torch
 # Modelling
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import classification_report
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 import joblib
 from xgboost import XGBClassifier
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-from sklearn.preprocessing import StandardScaler
 from scipy.stats import randint
-import random
-scaler = StandardScaler()
-device = 'cuda'
+
+
 
 def preprocessing(df):
     # Columns with missing value: AdmitDiagnosis, religion, marital_status, LOSgroupNum
@@ -23,7 +19,6 @@ def preprocessing(df):
     y = pd.DataFrame(df.pop('ExpiredHospital'))
     x1 = df.drop(labels=categorical_features, axis=1)
     x1.fillna(np.floor(x1.mean()), inplace=True)
-    # x1_scaled = (x1-x1.min())/(x1.max()-x1.min())
     x2 = df[categorical_features]
     x2 = x2.fillna(x2.mode().iloc[0])
     x2 = x2.apply(lambda x: pd.factorize(x)[0])
@@ -50,7 +45,6 @@ def train(df):
         'n_estimators': randint(100, 400),
         'max_depth': randint(10, 30),
         'learning_rate': [0.02, 0.05, 0.08],
-        # 'min_child_weight': randint(2, 5),
     }
 
     random_params = RandomizedSearchCV(model,
